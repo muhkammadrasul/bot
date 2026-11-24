@@ -1,0 +1,7 @@
+[build]
+  # quizzes/*.json fayllarini tekshirib, lib/quizzes.generated.js ga yig'adi
+  command = "npm run build"
+  publish = "public"
+
+[functions]
+  node_bundler = "esbuild"

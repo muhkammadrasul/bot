@@ -1,0 +1,27 @@
+{
+  "title": "Beginner - To be (1)",
+  "description": "\"To be\" fe'li: am, is, are",
+  "time": 20,
+  "questions": [
+    { "question": "I ___ a student.", "options": ["am", "is", "are"], "answer": "am", "explanation": "I bilan doim \"am\" ishlatiladi." },
+    { "question": "She ___ my mother.", "options": ["am", "is", "are"], "answer": "is", "explanation": "She (birlik) → \"is\"." },
+    { "question": "He ___ a good boy.", "options": ["am", "is", "are"], "answer": "is", "explanation": "He (birlik) → \"is\"." },
+    { "question": "It ___ a black dog.", "options": ["am", "is", "are"], "answer": "is", "explanation": "It (birlik) → \"is\"." },
+    { "question": "We ___ from Uzbekistan.", "options": ["am", "is", "are"], "answer": "are", "explanation": "We (ko'plik) → \"are\"." },
+    { "question": "You ___ my best friend.", "options": ["am", "is", "are"], "answer": "are", "explanation": "You bilan doim \"are\"." },
+    { "question": "They ___ at school.", "options": ["am", "is", "are"], "answer": "are", "explanation": "They (ko'plik) → \"are\"." },
+    { "question": "My father ___ a doctor.", "options": ["am", "is", "are"], "answer": "is", "explanation": "My father = he → \"is\"." },
+    { "question": "Tom and Ali ___ brothers.", "options": ["am", "is", "are"], "answer": "are", "explanation": "Tom and Ali = they → \"are\"." },
+    { "question": "The book ___ on the table.", "options": ["am", "is", "are"], "answer": "is", "explanation": "The book = it → \"is\"." },
+    { "question": "I ___ not tired.", "options": ["am", "is", "are"], "answer": "am", "explanation": "Inkor: I am not." },
+    { "question": "She ___ not at home.", "options": ["am", "is", "are"], "answer": "is", "explanation": "Inkor: she is not (isn't)." },
+    { "question": "They ___ not happy.", "options": ["am", "is", "are"], "answer": "are", "explanation": "Inkor: they are not (aren't)." },
+    { "question": "It ___ not cold today.", "options": ["am", "is", "are"], "answer": "is", "explanation": "Inkor: it is not (isn't)." },
+    { "question": "We ___ not late.", "options": ["am", "is", "are"], "answer": "are", "explanation": "Inkor: we are not (aren't)." },
+    { "question": "___ you ready?", "options": ["Am", "Is", "Are"], "answer": "Are", "explanation": "So'roq: Are you...?" },
+    { "question": "___ he your teacher?", "options": ["Am", "Is", "Are"], "answer": "Is", "explanation": "So'roq: Is he...?" },
+    { "question": "___ I right?", "options": ["Am", "Is", "Are"], "answer": "Am", "explanation": "So'roq: Am I...?" },
+    { "question": "___ she from Tashkent?", "options": ["Am", "Is", "Are"], "answer": "Is", "explanation": "So'roq: Is she...?" },
+    { "question": "___ they in the classroom?", "options": ["Am", "Is", "Are"], "answer": "Are", "explanation": "So'roq: Are they...?" }
+  ]
+}

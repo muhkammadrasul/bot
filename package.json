@@ -1,0 +1,14 @@
+{
+  "name": "quiz-bot-netlify",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build-quizzes.mjs"
+  },
+  "dependencies": {
+    "@grammyjs/auto-retry": "2.0.2",
+    "@netlify/blobs": "8.2.0",
+    "grammy": "1.30.0"
+  }
+}

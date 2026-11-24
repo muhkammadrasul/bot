@@ -1,0 +1,27 @@
+{
+  "title": "Beginner - To be (2)",
+  "description": "\"To be\" fe'li: am, is, are (2-qism)",
+  "time": 20,
+  "questions": [
+    { "question": "My sister ___ a nurse.", "options": ["am", "is", "are"], "answer": "is", "explanation": "My sister = she → \"is\"." },
+    { "question": "These apples ___ red.", "options": ["am", "is", "are"], "answer": "are", "explanation": "These apples (ko'plik) → \"are\"." },
+    { "question": "This apple ___ green.", "options": ["am", "is", "are"], "answer": "is", "explanation": "This apple (birlik) → \"is\"." },
+    { "question": "I ___ twelve years old.", "options": ["am", "is", "are"], "answer": "am", "explanation": "I bilan doim \"am\"." },
+    { "question": "The children ___ in the park.", "options": ["am", "is", "are"], "answer": "are", "explanation": "Children — \"child\"ning ko'pligi → \"are\"." },
+    { "question": "My name ___ Aziz.", "options": ["am", "is", "are"], "answer": "is", "explanation": "My name = it → \"is\"." },
+    { "question": "Your shoes ___ new.", "options": ["am", "is", "are"], "answer": "are", "explanation": "Shoes (ko'plik) → \"are\"." },
+    { "question": "The weather ___ nice today.", "options": ["am", "is", "are"], "answer": "is", "explanation": "The weather = it → \"is\"." },
+    { "question": "You and I ___ classmates.", "options": ["am", "is", "are"], "answer": "are", "explanation": "You and I = we → \"are\"." },
+    { "question": "Everybody ___ here.", "options": ["am", "is", "are"], "answer": "is", "explanation": "Everybody birlik hisoblanadi → \"is\"." },
+    { "question": "My parents ___ not at work.", "options": ["am", "is", "are"], "answer": "are", "explanation": "Inkor: parents are not (aren't)." },
+    { "question": "I ___ not hungry.", "options": ["am", "is", "are"], "answer": "am", "explanation": "Inkor: I am not (I'm not)." },
+    { "question": "This bag ___ not expensive.", "options": ["am", "is", "are"], "answer": "is", "explanation": "Inkor: this bag is not (isn't)." },
+    { "question": "The students ___ not in the library.", "options": ["am", "is", "are"], "answer": "are", "explanation": "Inkor: students are not (aren't)." },
+    { "question": "My phone ___ not on the desk.", "options": ["am", "is", "are"], "answer": "is", "explanation": "Inkor: my phone is not (isn't)." },
+    { "question": "___ your brother a pilot?", "options": ["Am", "Is", "Are"], "answer": "Is", "explanation": "So'roq: Is your brother...?" },
+    { "question": "___ these your books?", "options": ["Am", "Is", "Are"], "answer": "Are", "explanation": "So'roq: Are these...?" },
+    { "question": "___ I late for the lesson?", "options": ["Am", "Is", "Are"], "answer": "Am", "explanation": "So'roq: Am I...?" },
+    { "question": "___ the shop open now?", "options": ["Am", "Is", "Are"], "answer": "Is", "explanation": "So'roq: Is the shop...?" },
+    { "question": "___ your friends from Samarkand?", "options": ["Am", "Is", "Are"], "answer": "Are", "explanation": "So'roq: Are your friends...?" }
+  ]
+}
