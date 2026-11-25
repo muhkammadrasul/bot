@@ -1,16 +1,23 @@
 // Telegram webhook: har bir xabar/tugma bosilishi shu yerga keladi
 import { InlineKeyboard, Keyboard, webhookCallback } from "grammy";
 import {
-  bot, TOKEN, SECRET, quizzes, ACCESS_LABELS, NO_ACCESS, ADMIN_ONLY, DISABLED_TEXT,
-  TIME_CHOICES, MIN_TIME, MAX_TIME, MIN_PLAYERS_CHOICES,
+  bot, TOKEN, SECRET, OWNER_ID, quizzes, ACCESS_LABELS, NO_ACCESS, ADMIN_ONLY, DISABLED_TEXT,
+  TIME_CHOICES, MIN_TIME, MAX_TIME, MIN_PLAYERS_CHOICES, GAP_CHOICES, WAIT_CHOICES, TOGGLES,
   getChat, updateChat, rememberChat, targetChat, timeOf, accessOf, managersOf, enabledOf, isGroupType,
   isAdmin, canManage, settingsPanel, lobbyText, lobbyKeyboard,
-  getSession, readyNames, startQuiz, stopQuiz,
+  getSession, readyNames, startQuiz, stopQuiz, getQuiz, setSiteUrl, botUsername,
   getJSON, setJSON, getText, setText, del, listKeys,
-  esc, userName, fmtTime, parseTime, validTime,
+  esc, userName, fmtTime, parseTime, validTime, trunc,
 } from "../../lib/core.js";
+import { registerWizard, handleWizardText } from "../../lib/wizard.js";
+import { registerSched, handleSchedText, countSchedules } from "../../lib/sched.js";
+import { getUser, statsText } from "../../lib/stats.js";
+import { lastReport } from "../../lib/results.js";
+import {
+  reportError, isOwner, adminText, adminKeyboard, groupsText, errorsText, sendBackup, restoreBackup, downloadTelegramFile,
+} from "../../lib/admin.js";
 
-let SITE_URL = process.env.URL;
+const start = (chat, quizId, opts) => startQuiz(chat, quizId, opts);
 
 // ---------- yordamchilar ----------
 
@@ -22,7 +29,8 @@ function quizListKeyboard() {
 
 async function showPanel(ctx, targetId, edit) {
   const { chat, s } = await targetChat(targetId);
-  const { text, kb } = settingsPanel(chat, s, ctx.chat.type);
+  const sc = isGroupType(chat.type) ? await countSchedules(chat.id) : 0;
+  const { text, kb } = settingsPanel(chat, s, ctx.chat.type, sc);
   if (edit) await ctx.editMessageText(text, { parse_mode: "HTML", reply_markup: kb }).catch(() => {});
   else await ctx.reply(text, { parse_mode: "HTML", reply_markup: kb });
 }
@@ -52,8 +60,6 @@ async function showGroupList(ctx, edit) {
   if (edit) await ctx.editMessageText(text, { parse_mode: "HTML", reply_markup: kb }).catch(() => {});
   else await ctx.reply(text, { parse_mode: "HTML", reply_markup: kb });
 }
-
-const start = (chat, quizId) => startQuiz(chat, quizId, SITE_URL);
 
 async function stopAndReport(ctx, chatId) {
   const result = await stopQuiz(chatId);
@@ -93,7 +99,7 @@ bot.on("channel_post:text", async (ctx) => {
   } else if (m[1] === "stop") {
     await stopQuiz(ctx.chat.id);
   } else if (m[2]) {
-    await start(ctx.chat, m[2]);
+    await start(ctx.chat, m[2], { skipConfirm: true });
   } else {
     await ctx.reply(`Testni tanlab yozing:\n${[...quizzes.values()].map((q) => `/quiz ${q.id} — ${q.title}`).join("\n")}`);
   }
@@ -101,28 +107,48 @@ bot.on("channel_post:text", async (ctx) => {
 
 // ---------- buyruqlar ----------
 
+// Buyruqlar message:text handleridan OLDIN ro'yxatdan o'tishi shart (u hamma matnni to'xtatadi)
+registerSched(bot);
+registerWizard(bot);
+
 bot.command("start", async (ctx) => {
   const payload = ctx.match?.trim();
 
-  // Guruhga "👥 Guruhda" tugmasi orqali qo'shilganda
+  // Guruhga "👥 Guruhda" tugmasi yoki havola orqali qo'shilganda
   if (payload && ctx.chat.type !== "private") {
     if (!(await canManage(ctx.chat, ctx.from, ctx.msg.sender_chat))) return ctx.reply(NO_ACCESS);
-    return start(ctx.chat, payload);
+    return start(ctx.chat, payload, { startedBy: ctx.from?.id, skipConfirm: true });
   }
-  if (payload) return start(ctx.chat, payload);
+
+  // Ulashish havolasi orqali: test kartochkasi
+  if (payload && ctx.chat.type === "private") {
+    const quiz = await getQuiz(payload);
+    if (!quiz) return ctx.reply("⚠️ Bu havola bo'yicha test topilmadi. U o'chirilgan bo'lishi mumkin.");
+    const uname = await botUsername();
+    const kb = new InlineKeyboard().text("▶️ Boshlash", `start:${quiz.id}`).url("👥 Guruhda", `https://t.me/${uname}?startgroup=${quiz.id}`);
+    return ctx.reply(
+      `🎯 <b>${esc(quiz.title)}</b>\n${quiz.description ? `${esc(quiz.description)}\n` : ""}\n📝 ${quiz.questions.length} ta savol\n\nBoshlash uchun tugmani bosing:`,
+      { parse_mode: "HTML", reply_markup: kb },
+    );
+  }
+
   if (ctx.chat.type !== "private") return ctx.reply("Test tanlash: /quiz");
 
+  const uname = ctx.me.username;
   const kb = new InlineKeyboard();
   for (const q of quizzes.values()) {
-    kb.text(`▶️ ${q.title}`, `start:${q.id}`).url("👥 Guruhda", `https://t.me/${ctx.me.username}?startgroup=${q.id}`).row();
+    kb.text(`▶️ ${q.title}`, `start:${q.id}`).url("👥 Guruhda", `https://t.me/${uname}?startgroup=${q.id}`).row();
   }
-  kb.text("⚙️ Sozlamalar", `s:${ctx.from.id}`).text("👥 Mening guruhlarim", "glist");
+  kb.text("📋 Testlarim", "q:l").text("➕ Yangi test", "q:new").row();
+  kb.text("📈 Statistika", "ms").text("⚙️ Sozlamalar", `s:${ctx.from.id}`).row();
+  kb.text("👥 Mening guruhlarim", "glist");
   await ctx.reply(
     "Salom! Men quiz botman 🎯\n\n" +
       "▶️ — testni shu yerda yechish\n" +
       "👥 Guruhda — botni guruhga qo'shib, testni o'sha yerda boshlash\n" +
-      "⚙️ — shu chat uchun savol vaqti\n" +
-      "👥 Mening guruhlarim — guruhlaringizni shu yerdan boshqarish: testlarni yoqish/o'chirish, vaqt, kim boshqaradi\n\n" +
+      "📋 Testlarim / ➕ Yangi test — o'z testlaringizni yaratish va boshqarish\n" +
+      "📈 Statistika — natijalaringiz, seriya va nishonlar\n" +
+      "👥 Mening guruhlarim — guruhlaringizni boshqarish\n\n" +
       "Yordam: /help",
     { parse_mode: "HTML", reply_markup: kb },
   );
@@ -132,7 +158,7 @@ bot.command("quiz", async (ctx) => {
   if (!(await canManage(ctx.chat, ctx.from, ctx.msg.sender_chat))) return ctx.reply(NO_ACCESS);
   if (!enabledOf(await getChat(ctx.chat.id))) return ctx.reply(DISABLED_TEXT);
   const id = ctx.match?.trim();
-  if (id) return start(ctx.chat, id);
+  if (id) return start(ctx.chat, id, { startedBy: ctx.from?.id });
   await ctx.reply("Qaysi testni boshlaymiz?", { reply_markup: quizListKeyboard() });
 });
 
@@ -141,20 +167,59 @@ bot.command("stop", async (ctx) => {
   if (!(await stopAndReport(ctx, ctx.chat.id))) await ctx.reply("Hozir hech qanday test ketmayapti.");
 });
 
+bot.command("pause", async (ctx) => {
+  if (!(await canManage(ctx.chat, ctx.from, ctx.msg.sender_chat))) return ctx.reply(NO_ACCESS);
+  const s = await getSession(ctx.chat.id);
+  if (!s || s.phase !== "running") return ctx.reply("Hozir pauzaga qo'yadigan test yo'q (yoki u hali boshlanmagan).");
+  await setText(`pause/${ctx.chat.id}/${s.runId}`, "1");
+  await ctx.reply("⏸ <b>Pauza.</b> Joriy savol tugagach test to'xtaydi.\nDavom ettirish: /resume", { parse_mode: "HTML" });
+});
+
+bot.command("resume", async (ctx) => {
+  if (!(await canManage(ctx.chat, ctx.from, ctx.msg.sender_chat))) return ctx.reply(NO_ACCESS);
+  const s = await getSession(ctx.chat.id);
+  const key = s && `pause/${ctx.chat.id}/${s.runId}`;
+  if (!s || (await getText(key)) === null) return ctx.reply("Pauzada turgan test yo'q.");
+  await del(key);
+  await ctx.reply("▶️ Test davom etmoqda!");
+});
+
+bot.command("report", async (ctx) => {
+  if (!isGroupType(ctx.chat.type)) return ctx.reply("Hisobot guruh testlari uchun. Uni guruhda yozing: /report");
+  if (!(await canManage(ctx.chat, ctx.from, ctx.msg.sender_chat))) return ctx.reply(NO_ACCESS);
+  const text = await lastReport(ctx.chat.id);
+  await ctx.reply(text ?? "Hali hisobot yo'q — avval guruhda test o'tkazing.", { parse_mode: "HTML" });
+});
+
+bot.command("mystats", async (ctx) => {
+  if (!ctx.from) return;
+  const u = await getUser(ctx.from.id);
+  const kb = u.wrong.length ? new InlineKeyboard().text(`🔁 Xatolar ustida ishlash (${Math.min(u.wrong.length, 10)})`, "mx") : undefined;
+  await ctx.reply(statsText(u), { parse_mode: "HTML", reply_markup: kb });
+});
+
 bot.command("help", (ctx) =>
   ctx.reply(
-    "<b>Buyruqlar</b>\n" +
+    "<b>Testlar</b>\n" +
       "/quiz — testlar ro'yxati\n" +
       "/quiz test_id — testni darhol boshlash\n" +
       "/stop — ketayotgan testni to'xtatish\n" +
+      "/pause, /resume — testni pauzaga qo'yish va davom ettirish\n" +
+      "/practice — yakka mashq (shaxsiy chatda)\n\n" +
+      "<b>O'z testlaringiz (shaxsiy chatda)</b>\n" +
+      "/newquiz — yangi test yaratish\n" +
+      "/vocab — lug'atdan test yaratish\n" +
+      "/mytests — mening testlarim\n\n" +
+      "<b>Natijalar</b>\n" +
+      "/mystats — statistika, seriya, nishonlar\n" +
+      "/report — oxirgi guruh testi hisoboti\n\n" +
+      "<b>Sozlamalar</b>\n" +
       "/settings — sozlamalar\n" +
       "/groups — mening guruhlarim (shaxsiy chatda)\n" +
-      "/time 25 — har bir savolga 25 soniya (5–600, masalan 2m = 2 daqiqa)\n" +
-      "/manager — (guruhda, odamning xabariga javob qilib) testni boshqarish huquqini berish yoki olish\n\n" +
-      "<b>Guruhlarni boshqarish</b>\nBotning shaxsiy chatida /groups. " +
-      "U yerda har bir guruh uchun testlarni yoqish/o'chirish, savol vaqti, kamida necha kishi va kim boshqarishini tanlaysiz.\n\n" +
+      "/time 25 — har bir savolga 25 soniya (5–600, masalan 2m)\n" +
+      "/manager — (guruhda, odamning xabariga javob qilib) boshqarish huquqini berish yoki olish\n\n" +
       "Guruhda test kamida belgilangan sondagi odam «✋ Men tayyorman» bosgach boshlanadi. " +
-      "Savollar va variantlar har safar aralashtiriladi, oxirida reyting chiqadi.\n\n" +
+      "Savollar va variantlar aralashtiriladi, oxirida reyting chiqadi.\n\n" +
       "<b>Testlar:</b>\n" +
       [...quizzes.values()].map((q) => `• <code>${q.id}</code> — ${esc(q.title)} (${q.questions.length} ta savol)`).join("\n"),
     { parse_mode: "HTML" },
@@ -167,7 +232,25 @@ bot.callbackQuery(/^start:(.+)$/, async (ctx) => {
   if (!(await canManage(chat, ctx.from))) return ctx.answerCallbackQuery({ text: NO_ACCESS, show_alert: true });
   await ctx.answerCallbackQuery();
   if (chat.type !== "private") await ctx.deleteMessage().catch(() => {});
-  await start(chat, ctx.match[1]);
+  await start(chat, ctx.match[1], { startedBy: ctx.from.id });
+});
+
+// Boshlashdan oldin tasdiq
+bot.callbackQuery(/^cf:y:(.+)$/, async (ctx) => {
+  const chat = ctx.callbackQuery.message?.chat;
+  if (!chat) return ctx.answerCallbackQuery();
+  if (!(await canManage(chat, ctx.from))) return ctx.answerCallbackQuery({ text: NO_ACCESS, show_alert: true });
+  await ctx.answerCallbackQuery();
+  await ctx.deleteMessage().catch(() => {});
+  await start(chat, ctx.match[1], { startedBy: ctx.from.id, skipConfirm: true });
+});
+
+bot.callbackQuery("cf:n", async (ctx) => {
+  const chat = ctx.callbackQuery.message?.chat;
+  if (!chat) return ctx.answerCallbackQuery();
+  if (!(await canManage(chat, ctx.from))) return ctx.answerCallbackQuery({ text: NO_ACCESS, show_alert: true });
+  await ctx.answerCallbackQuery({ text: "Bekor qilindi" });
+  await ctx.deleteMessage().catch(() => {});
 });
 
 // ---------- kutish xonasi ----------
@@ -186,10 +269,19 @@ bot.callbackQuery("lobby:join", async (ctx) => {
 
   const names = await readyNames(chatId, session.runId);
   const countdown = session.phase === "countdown" || names.length >= session.min;
-  const quiz = quizzes.get(session.quizId);
-  await ctx
-    .editMessageText(lobbyText({ quiz, ...session, names, countdown }), { parse_mode: "HTML", reply_markup: lobbyKeyboard() })
-    .catch(() => {});
+  await ctx.editMessageText(lobbyText({ ...session, names, countdown }), { parse_mode: "HTML", reply_markup: lobbyKeyboard() }).catch(() => {});
+});
+
+bot.callbackQuery("lobby:now", async (ctx) => {
+  const session = ctx.chat && (await getSession(ctx.chat.id));
+  if (!session || (session.phase !== "lobby" && session.phase !== "countdown")) return ctx.answerCallbackQuery({ text: "Bu test allaqachon boshlangan yoki tugagan." });
+  if (!(await canManage(ctx.chat, ctx.from))) return ctx.answerCallbackQuery({ text: NO_ACCESS, show_alert: true });
+  const ready = (await readyNames(ctx.chat.id, session.runId)).length;
+  if (ready < session.min) {
+    return ctx.answerCallbackQuery({ text: `Avval kamida ${session.min} kishi «Tayyorman» bosishi kerak (hozir ${ready}).`, show_alert: true });
+  }
+  await setText(`start/${ctx.chat.id}/${session.runId}`, "1");
+  await ctx.answerCallbackQuery({ text: "▶️ Test boshlanmoqda..." });
 });
 
 bot.callbackQuery("lobby:cancel", async (ctx) => {
@@ -198,6 +290,30 @@ bot.callbackQuery("lobby:cancel", async (ctx) => {
   if (!(await canManage(ctx.chat, ctx.from))) return ctx.answerCallbackQuery({ text: NO_ACCESS, show_alert: true });
   await ctx.answerCallbackQuery({ text: "Bekor qilinmoqda..." });
   await stopAndReport(ctx, ctx.chat.id);
+});
+
+// ---------- xatolar ustida ishlash va statistika ----------
+
+bot.callbackQuery("mx", async (ctx) => {
+  const chat = ctx.callbackQuery.message?.chat;
+  if (!chat || chat.type !== "private") return ctx.answerCallbackQuery({ text: "Buni botning shaxsiy chatida bosing.", show_alert: true });
+  const u = await getUser(ctx.from.id);
+  if (!u.wrong.length) return ctx.answerCallbackQuery({ text: "Xatolar ro'yxati bo'sh 🎉", show_alert: true });
+  await ctx.answerCallbackQuery();
+  const items = u.wrong.slice(-10);
+  await start(chat, "mistakes", {
+    custom: { id: "mistakes", title: "Xatolar ustida ishlash", description: "", questions: items.map((w) => ({ ...w.q, key: w.key })) },
+    kind: "mistakes",
+    skipConfirm: true,
+    startedBy: ctx.from.id,
+  });
+});
+
+bot.callbackQuery("ms", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const u = await getUser(ctx.from.id);
+  const kb = u.wrong.length ? new InlineKeyboard().text(`🔁 Xatolar ustida ishlash (${Math.min(u.wrong.length, 10)})`, "mx") : undefined;
+  await ctx.reply(statsText(u), { parse_mode: "HTML", reply_markup: kb });
 });
 
 // ---------- sozlamalar ----------
@@ -254,6 +370,31 @@ bot.callbackQuery(/^s:(-?\d+)(?::(\w+)(?::([\w-]+))?)?$/, async (ctx) => {
       if (!TIME_CHOICES.includes(t)) return ctx.answerCallbackQuery();
       await updateChat(target.id, { time: t });
       await ctx.answerCallbackQuery({ text: `Har bir savolga ${fmtTime(t)} (keyingi testdan)` });
+      return showPanel(ctx, target.id, true);
+    }
+
+    case "gp": {
+      const g = Number(arg);
+      if (!GAP_CHOICES.includes(g)) return ctx.answerCallbackQuery();
+      await updateChat(target.id, { gap: g });
+      await ctx.answerCallbackQuery({ text: `Savollar orasida ${g} soniya (keyingi testdan)` });
+      return showPanel(ctx, target.id, true);
+    }
+
+    case "wt": {
+      const w = Number(arg);
+      if (!WAIT_CHOICES.includes(w)) return ctx.answerCallbackQuery();
+      await updateChat(target.id, { wait: w });
+      await ctx.answerCallbackQuery({ text: `Yetarli odam yig'ilgach ${fmtTime(w)} kutiladi` });
+      return showPanel(ctx, target.id, true);
+    }
+
+    case "tg": {
+      if (!TOGGLES[arg]) return ctx.answerCallbackQuery();
+      const [field, label, def] = TOGGLES[arg];
+      const on = !(s[field] ?? def);
+      await updateChat(target.id, { [field]: on });
+      await ctx.answerCallbackQuery({ text: `${label}: ${on ? "yoqildi" : "o'chirildi"}` });
       return showPanel(ctx, target.id, true);
     }
 
@@ -373,12 +514,56 @@ bot.command("manager", async (ctx) => {
   );
 });
 
-// "Bekor qilish" va "O'z vaqtim" javoblari
+// ---------- bot egasi: /admin, zaxira, tiklash ----------
+
+bot.command("admin", async (ctx) => {
+  if (ctx.chat.type !== "private") return;
+  if (!isOwner(ctx.from.id)) {
+    return ctx.reply(
+      (OWNER_ID ? "Bu buyruq faqat bot egasi uchun." : "Bot egasi hali sozlanmagan.") + `\nSizning Telegram ID: <code>${ctx.from.id}</code>`,
+      { parse_mode: "HTML" },
+    );
+  }
+  await ctx.reply(await adminText(), { parse_mode: "HTML", reply_markup: adminKeyboard() });
+});
+
+bot.callbackQuery(/^ad:(\w+)$/, async (ctx) => {
+  if (!isOwner(ctx.from.id)) return ctx.answerCallbackQuery({ text: "Faqat bot egasi uchun.", show_alert: true });
+  const action = ctx.match[1];
+  const back = new InlineKeyboard().text("⬅️ Orqaga", "ad:rf");
+  if (action === "bk") {
+    await ctx.answerCallbackQuery({ text: "Zaxira tayyorlanmoqda..." });
+    await sendBackup(OWNER_ID, "Qo'lda olingan zaxira");
+    return;
+  }
+  await ctx.answerCallbackQuery();
+  if (action === "gr") return ctx.editMessageText(await groupsText(), { parse_mode: "HTML", reply_markup: back });
+  if (action === "er") return ctx.editMessageText(await errorsText(), { parse_mode: "HTML", reply_markup: back });
+  return ctx.editMessageText(await adminText(), { parse_mode: "HTML", reply_markup: adminKeyboard() }).catch(() => {});
+});
+
+bot.command("restore", async (ctx) => {
+  if (ctx.chat.type !== "private" || !isOwner(ctx.from.id)) return;
+  const doc = ctx.msg.reply_to_message?.document;
+  if (!doc) return ctx.reply("Zaxira fayliga javob (reply) qilib /restore yozing.");
+  try {
+    const n = await restoreBackup(JSON.parse(await downloadTelegramFile(doc.file_id)));
+    await ctx.reply(`✅ Tiklandi: ${n} ta yozuv.`);
+  } catch (e) {
+    await ctx.reply(`⚠️ Tiklab bo'lmadi: ${esc(e.message)}`, { parse_mode: "HTML" });
+  }
+});
+
+// ---------- matnli javoblar ----------
+
 bot.on("message:text", async (ctx) => {
   if (ctx.chat.type === "private" && ctx.msg.text === "Bekor qilish") {
     await del(`await/mgr/${ctx.from.id}`);
     return ctx.reply("Bekor qilindi.", { reply_markup: { remove_keyboard: true } });
   }
+
+  if (await handleWizardText(ctx)) return;
+  if (await handleSchedText(ctx)) return;
 
   const pending = await getJSON(`await/time/${ctx.chat.id}`);
   if (!pending || pending.userId !== ctx.from?.id) return;
@@ -405,15 +590,17 @@ bot.on("poll_answer", async (ctx) => {
   await Promise.all([setText(`ans/${base}/${ans.poll_id}~${ok}~${ms}`, "1"), setText(`name/${base}`, userName(ans.user))]);
 });
 
-bot.catch((err) => console.error("Xato:", err.error?.message ?? err));
+bot.catch(async (err) => {
+  await reportError("telegram", err.error ?? err, err.ctx?.chat ? `chat ${err.ctx.chat.id}` : "");
+});
 
 // ---------- Netlify funksiyasi ----------
 
 const handleUpdate = webhookCallback(bot, "std/http", { secretToken: SECRET, timeoutMilliseconds: 9000 });
 
-export default async (req, context) => {
+export default async (req) => {
   if (!TOKEN || !SECRET) return new Response("BOT_TOKEN yoki WEBHOOK_SECRET sozlanmagan", { status: 500 });
   if (req.method !== "POST") return new Response("Linguify Quiz webhook ishlayapti ✅");
-  SITE_URL = context?.site?.url || process.env.URL;
+  setSiteUrl(new URL(req.url).origin);
   return handleUpdate(req);
 };
